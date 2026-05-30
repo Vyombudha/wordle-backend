@@ -2,12 +2,14 @@
 import express from 'express';
 const router = express.Router();
 
-import { daily, play } from "../controllers/wordleController.js";
+import { play, skipGame, start } from "../controllers/wordleController.js";
+import { asyncHandler } from '../utils/globalAsyncHanlder.js';
 
 
-router.get('/daily', daily);
-router.get('/play', play);
 
+router.get('/start', asyncHandler(start));
+router.post('/play', asyncHandler(play));
+router.get('/next', asyncHandler(skipGame));
 
 
 

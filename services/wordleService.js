@@ -17177,14 +17177,29 @@ const VALID_WORDS = new Set([
 ]);
 
 import { game } from "../models/gameModel.js";
-import { GameNotFoundError, InvalidGameStateError } from "../errors/gameErrors.js";
+import { GameNotFoundError, InvalidGameStateError, InvalidGuessError } from "../errors/gameErrors.js";
 import { v4 } from "uuid";
+import { minutesToMs } from "../utils/minuteCalculator.js";
+
+
 
 /**
  * stores respective gameIDs and their game  state
  * @type {Map<Number,game>}
  */
 const gameStates = new Map();
+
+const GAME_TTL_MS = minutesToMs(30);
+/**
+ * Cleans up games that haven't been played for more than 30 minutes, every 5 minutes
+ */
+setInterval(() => {
+    const now = Date.now();
+    for (const [gameID, game] of gameStates) {
+        if ((now - game.lastActivity) > GAME_TTL_MS) gameStates.delete(gameID);
+    }
+}, minutesToMs(5));
+
 
 /**
  * Take the current game difficulty, create a new gameId and game Object. Finally, stores it in gameState Map
@@ -17197,10 +17212,7 @@ export function startGame(isHardMode = false) {
     let gameID = v4();
     let word = validAnswerArray[Math.floor(Math.random() * validAnswerArray.length)];
     let currGame = new game(word);
-
     gameStates.set(gameID, currGame);
-
-
     return gameID;
 }
 
@@ -17227,6 +17239,7 @@ export function nextGame(gameID, isHardMode = false) {
 export function makeGuess(guess, gameID, isHardMode = false) {
 
     if (!gameStates.has(gameID)) throw new GameNotFoundError(gameID);
+    if (!VALID_WORDS.has(guess)) throw new InvalidGuessError(guess);
 
     const currGame = gameStates.get(gameID);
 
