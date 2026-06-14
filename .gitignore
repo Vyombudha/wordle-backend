@@ -1,6 +1,6 @@
-<<<<<<< HEAD
 node_modules
-=======
+.env
+
 ### AL ###
 #Template for AL projects for Dynamics 365 Business Central
 #launch.json folder
@@ -24,4 +24,6 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
->>>>>>> 938573b302a8b0dea9cc67be3f0fb0bc01aeeb09
+output.txt
+
+/generated/prisma

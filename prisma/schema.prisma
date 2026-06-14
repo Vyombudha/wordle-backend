@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  games         Game[]
+  refreshTokens RefreshToken[]
+  streak        Streak?
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Game {
+  id               String   @id @default(uuid())
+  remainingGuesses Int      @default(6)
+  guesses          String[]
+  isWinner         Boolean  @default(false)
+  targetWord       String
+  createdAt        DateTime @default(now())
+  userId           String
+  isCompleted      Boolean  @default(false)
+  mode             GameMode @default(EASY)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Streak {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  easyCurrentStreak  Int       @default(0)
+  easyMaxStreak      Int       @default(0)
+  easyLastPlayed     DateTime?
+  hardCurrentStreak  Int       @default(0)
+  hardMaxStreak      Int       @default(0)
+  hardLastPlayed     DateTime?
+  dailyCurrentStreak Int       @default(0)
+  dailyMaxStreak     Int       @default(0)
+  dailyLastPlayed    DateTime?
+  updatedAt          DateTime  @updatedAt
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum GameMode {
+  EASY
+  HARD
+  DAILY
+}

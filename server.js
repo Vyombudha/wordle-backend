@@ -1,11 +1,10 @@
 import 'dotenv/config';
 import express from "express";
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 
-
-import { globalErrorHandler } from './middlewares/errorHandler.js';
-import { minutesToMs } from './utils/minuteCalculator.js';
-import wordleRouter from './routes/wordleRoute.js';
+import { globalErrorHandler } from './middlewares/errorHandler.middleware.js';
+import { minutesToMs } from './utils/timeCalculator.utils.js';
 
 
 const app = express();
@@ -16,18 +15,21 @@ const globalLimiter = rateLimit({
 });
 
 
-// middle ware for json
+// middleware 
 app.use(globalLimiter);
+app.use(cookieParser());
 app.use(express.json());
 
 
-
 // Routes
-app.use('/game', wordleRouter);
+// app.use('/game', wordleRouter);
+// app.use('/user' ,);
 
 
 // global handler
 app.use(globalErrorHandler);
+
+
 
 app.listen(PORT, () => {
     console.log(`Server Running at http://localhost:${PORT}`);
