@@ -2,7 +2,9 @@ import { test, expect, beforeEach, vi } from 'vitest';
 import * as UserService from '../services/user.service.js';
 import * as EmailService from '../services/email.service.js';
 import prisma from '../db/prisma.js';
-import { PendingRegistrationCodeInvalidError, PendingRegistrationNotFoundError, UserAlreadyExistsError, PendingRegistrationExpiredError, UserNotFoundError, InvalidCredentialsError } from '../errors/user.errors.js';
+import * as UserError from '../errors/user.errors.js';
+import * as RegistrationError from '../errors/registration.errors.js';
+
 
 // intercept the email, grab the code instead
 let capturedCode;
@@ -47,18 +49,18 @@ test("LOGIN USER: should login successfully", async () => {
 
 
 
-test("WRONG CREDENTIALS ON VERIFY: should throw PendingRegistrationNotFoundError", async () => {
+test("WRONG CREDENTIALS ON VERIFY: should throw RegistrationError.NotFound()", async () => {
 
 
     await UserService.initiateUser(testEmail, testPassword);
     await expect(
         UserService.verifyAndCreateUser(capturedCode, 'justsomerandomEmail')
-    ).rejects.toThrow(PendingRegistrationNotFoundError);
+    ).rejects.toThrow(RegistrationError.NotFound);
 
 })
 
 
-test("EXPIRED VERIFICATION CODE: should throw PendingRegistrationExpiredError", async () => {
+test("EXPIRED VERIFICATION CODE: should throw RegistrationError.Expired()", async () => {
 
 
     await UserService.initiateUser(testEmail, testPassword);
@@ -71,20 +73,20 @@ test("EXPIRED VERIFICATION CODE: should throw PendingRegistrationExpiredError", 
 
     await expect(
         UserService.verifyAndCreateUser(capturedCode, testEmail)
-    ).rejects.toThrow(PendingRegistrationExpiredError);
+    ).rejects.toThrow(RegistrationError.Expired);
 });
 
 
 
-test("INVALID VERIFICATION CODE: should throw PendingRegistrationCodeInvalidError", async () => {
+test("INVALID VERIFICATION CODE: should throw RegistrationError.CodeInvalid()", async () => {
     await UserService.initiateUser(testEmail, testPassword);
     await expect(
         UserService.verifyAndCreateUser('wrongCode', testEmail)
-    ).rejects.toThrow(PendingRegistrationCodeInvalidError);
+    ).rejects.toThrow(RegistrationError.CodeInvalid);
 });
 
 
-test("TRYING TO REGISTER AS VERIFIED USER: should throw UserAlreadyExistsError", async () => {
+test("TRYING TO REGISTER AS VERIFIED USER: should throw UserError.AlreadyExists()", async () => {
 
     await UserService.initiateUser(testEmail, testPassword);
     await UserService.verifyAndCreateUser(capturedCode, testEmail);
@@ -94,18 +96,18 @@ test("TRYING TO REGISTER AS VERIFIED USER: should throw UserAlreadyExistsError",
 
     await expect(
         UserService.initiateUser(testEmail, testPassword)
-    ).rejects.toThrow(UserAlreadyExistsError);
+    ).rejects.toThrow(UserError.AlreadyExists);
 });
 
-test("TRYING TO LOGIN AS INVALID EMAIL: should throw UserNotFoundError", async () => {
+test("TRYING TO LOGIN AS INVALID EMAIL: should throw UserError.NotFound()", async () => {
 
     await expect(
         UserService.login('invalidEmail', 'randompassword')
-    ).rejects.toThrow(UserNotFoundError);
+    ).rejects.toThrow(UserError.NotFound);
 })
 
 
-test("TRYING TO LOGIN WITH WRONG PASSWORD: should throw InvalidCredentialsError", async () => {
+test("TRYING TO LOGIN WITH WRONG PASSWORD: should throw UserError.InvalidCredentials()", async () => {
 
     await UserService.initiateUser(testEmail, testPassword);
     await UserService.verifyAndCreateUser(capturedCode, testEmail);
@@ -113,5 +115,5 @@ test("TRYING TO LOGIN WITH WRONG PASSWORD: should throw InvalidCredentialsError"
 
     await expect(
         UserService.login(testEmail, 'wrongPassword')
-    ).rejects.toThrow(InvalidCredentialsError);
+    ).rejects.toThrow(UserError.InvalidCredentials);
 })

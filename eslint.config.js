@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 import { defineConfig } from "eslint/config";
 import unicorn from "eslint-plugin-unicorn";
+import importPlugin from 'eslint-plugin-import';
 
 export default defineConfig([
   {
@@ -16,7 +17,7 @@ export default defineConfig([
       "no-undef": "error",
       "unicorn/filename-case": ["error", {
         "case": "camelCase"
-      }]
+      }],
     }
   }
 ]);
