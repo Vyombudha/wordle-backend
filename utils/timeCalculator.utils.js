@@ -10,6 +10,7 @@ export function minutesToMs(timeInMinutes) {
 }
 
 
+
 /**
  * takes times in days, converts into ms
  * @param {number} timeInDays 

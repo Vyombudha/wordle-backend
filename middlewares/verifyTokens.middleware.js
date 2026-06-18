@@ -1,11 +1,11 @@
 import { verifyAccessToken } from '../utils/jwt.utils.js';
-import { InvalidTokenError, TokenExpiredError } from '../errors/token.errors.js';
+import * as TokenError from '../errors/token.errors.js';
 
 export async function validateUserToken(req, res, next) {
     const { accessToken } = req.cookies;
 
     if (!accessToken) {
-        return next(InvalidTokenError());
+        return next(new TokenError.Invalid());
     }
 
     const result = verifyAccessToken(accessToken);
@@ -13,9 +13,9 @@ export async function validateUserToken(req, res, next) {
     if (!result.valid) {
 
         if (result.error === "TOKEN_EXPIRED") {
-            return next(new TokenExpiredError());
+            return next(new TokenError.Expired());
         }
-        return next(new InvalidTokenError());
+        return next(new TokenError.Invalid());
     }
     req.user = {
         email: result.decoded.email,

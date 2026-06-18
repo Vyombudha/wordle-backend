@@ -1,7 +1,6 @@
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
 }
@@ -15,6 +14,15 @@ model User {
   games         Game[]
   refreshTokens RefreshToken[]
   streak        Streak?
+}
+
+model PendingUserRegistrations {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String 
+  verificationCode String 
+  createdAt     DateTime      @default(now())
+  expiresAt     DateTime 
 }
 
 model RefreshToken {

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { verifyRefreshToken } from '../utils/jwt.utils.js';
 import prisma from '../db/prisma.js';
-import { InvalidTokenError } from '../errors/token.errors.js';
+import * as TokenError from '../errors/token.errors.js';
 import { getAccessToken, getRefreshToken } from '../utils/jwt.utils.js';
 
 const getExpiryDate = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -10,6 +10,7 @@ const getExpiryDate = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7
 
 /**  @typedef { import('../services/user.service.js').User } User */
 
+                                                                    
 /**
  * 
  * @param {User} user 
@@ -39,7 +40,7 @@ export async function rotateRefreshToken(oldRefreshToken) {
     const result = verifyRefreshToken(oldRefreshToken);
 
     if (!result.valid) {
-        throw new InvalidTokenError();
+        throw new TokenError.Invalid();
     }
 
     const user = {
@@ -63,7 +64,7 @@ export async function rotateRefreshToken(oldRefreshToken) {
                 userId: user.id
             }
         });
-        throw new InvalidTokenError();
+        throw new TokenError.Invalid();
     }
 
     const newRefreshToken = getRefreshToken(user);

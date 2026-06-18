@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { Resend } from 'resend';
-import crypto from 'crypto';
 
 
 
@@ -21,3 +20,5 @@ export async function sendRegistrationEmail(email, verificationCode) {
         html: `<h2>Your Verification Code is ${verificationCode}. Please, do not share with others</h2>`
     });
 }
+
+

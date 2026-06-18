@@ -1,15 +1,13 @@
-export class InvalidTokenError extends Error {
+import { AppError } from "./base.errors.js";
+
+export class Invalid extends AppError {
     constructor() {
-        super(`Invalid Token Sent From User`);
-        this.name = 'InvalidTokenError';
-        this.statusCode = 401; // 401 cause the token is invalid, and we don't know who the user is
+        super(`Invalid Token Sent From User`, 401);
     }
 }
 
-export class TokenExpiredError extends Error {
+export class Expired extends AppError {
     constructor() {
-        super(`Invalid Token Sent`);
-        this.name = 'TokenExpiredError';
-        this.statusCode = 401; // 401 cause the token is invalid, and we don't know who the user is
+        super(`Invalid Token Sent`, 401);
     }
 }
