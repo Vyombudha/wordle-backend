@@ -21,7 +21,7 @@ This repository is currently on the `oauth-refactor` branch.
 
 1. **Clone the project:**
 ```bash
-   git clone [https://github.com/Vyombudha/wordle-backend.git](https://github.com/Vyombudha/wordle-backend.git)
+   git clone https://github.com/Vyombudha/wordle-backend.git
    cd wordle-backend
 ```
 
