@@ -22,7 +22,7 @@ This repository is currently on the `oauth-refactor` branch.
 1. **Clone the project:**
 ```bash
    git clone [https://github.com/Vyombudha/wordle-backend.git]
-   cd wordle_backend
+   cd wordle-backend
 ```
 
 2. **Install Dependencies:**
