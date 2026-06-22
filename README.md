@@ -3,7 +3,7 @@
 A lightweight, scalable backend service for a Wordle clone game. 
 
 ##  Current Status & Features
-- **Core Game Loop:** Handles word validation, daily word generation, and game state tracking.
+- **Core Game Loop:** Handles word validation, daily word generation (In Progress), and game state tracking.
 - **Database:** Structured with **Prisma ORM** for clean data mapping and type safety.
 - **Authentication (In Progress):** Currently features a custom email/password system, moving to OAuth (Google/Discord) next for smoother user onboarding.
 
@@ -23,4 +23,25 @@ This repository is currently on the `oauth-refactor` branch.
 ```bash
    git clone [https://github.com/Vyombudha/wordle-backend.git]
    cd wordle_backend
+```
+
+2. **Install Dependencies:**
+```bash
+    npm install
+
+```
+3. **Set up environment variables:**
+Create a .env file in the root directory and add your database URL:
+```bash
+    DATABASE_URL="your-database-connection-string"
+```
+
+4. **Run Database Migrations:**
+```bash
+   npx prisma migrate dev
+```
+
+5. **Start Dev Server:**
+```bash
+   npm run dev
 ```
