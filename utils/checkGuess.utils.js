@@ -1,11 +1,15 @@
-import { InvalidGameStateError, InvalidGuessLengthError } from '../errors/game.errors.js';
 
 /**
- * @typedef {object} game
+ * @typedef {object} Game
+ * @property {string} id
+ * @property {string[]} guesses
+ * @property {Date} createdAt
+ * @property {boolean} isCompleted
+ * @property {Enumerator} mode
+ * @property {string} userId
+ * @property {number} remainingGuesses 
  * @property {string} targetWord
- * @property {string} guess
- * @property {number} remainingGuesses
- * @property {boolean} isWinner
+ * @property {boolean} isWinner 
  */
 
 /**
@@ -15,32 +19,30 @@ import { InvalidGameStateError, InvalidGuessLengthError } from '../errors/game.e
  * @returns {boolean}
  */
 const checkGameState = (remainingGuesses, isWinner) => {
- return remainingGuesses === 0 || isWinner;
+    return remainingGuesses === 0 || isWinner;
 }
 
 
 
+
+
 /**
- * @param {game} game - current game state object
+ * @param {Game} game - current game state object
+ * @param {string} guess - guess for this move
  * @returns {{
  *   result: string[],
  *   remainingGuesses: number,
  *   isWinner: boolean,
- *   isGameOver: boolean
+ *   isCompleted: boolean,
+ *   guesses : string[]
  * }}
  */
-export default function validateGuess(game) {
-    
-    let { remainingGuesses, isWinner, guess, targetWord } = game;
-    if (guess.length !== targetWord.length) {
-        throw new InvalidGuessLengthError(targetWord.length, guess.length);
-    }
+export function validateGuess(game, guess) {
 
-    if (checkGameState(remainingGuesses, isWinner)) {
-        throw new InvalidGameStateError(`game already completed`);
-    }
+    let { remainingGuesses, targetWord } = game;
 
 
+    const newGuesses = [...game.guesses, guess];
     const secretChars = targetWord.split('');
     const guessChars = guess.split('');
     const result = Array(targetWord.length).fill('gray');
@@ -76,9 +78,10 @@ export default function validateGuess(game) {
 
     return {
         result,
+        guesses: newGuesses,
         remainingGuesses: newRemainingGuesses,
         isWinner: newIsWinner,
-        isGameOver: checkGameState(remainingGuesses, isWinner)
+        isCompleted: checkGameState(newRemainingGuesses, newIsWinner)
     };
 }
 

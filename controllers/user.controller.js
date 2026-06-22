@@ -52,7 +52,7 @@ export async function loginUser(req, res) {
         success: true,
         data,
         message: "Login successfull"
-    })
+    });
 }
 
 export async function rotateTokens(req, res) {
@@ -83,7 +83,7 @@ export async function logoutUser(req, res) {
     return res.status(200).json({
         success: true,
         message: "Logged out successfully"
-    })
+    });
 }
 
 
@@ -98,5 +98,5 @@ export async function logoutAllDevices(req, res) {
     return res.status(200).json({
         success: true,
         message: "Logged out from all devices successfully"
-    })
+    });
 }

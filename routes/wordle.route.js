@@ -1,18 +1,10 @@
 
-// import express from 'express';
-// const router = express.Router();
+import express from 'express';
+const router = express.Router();
 
-// import { play, skipGame, start } from "../controllers/wordleController.js";
-// import { asyncHandler } from '../utils/globalAsyncHanlder.js';
-
-
-
-// router.get('/start', asyncHandler(start));
-// router.post('/play', asyncHandler(play));
-// router.get('/next', asyncHandler(skipGame));
+import * as WordleController from '../controllers/wordle.controller.js';
 
 
 
 
-
-// export default router;
+export default router;

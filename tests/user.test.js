@@ -12,7 +12,7 @@ vi.spyOn(EmailService, 'sendRegistrationEmail').mockImplementation(async (email,
     capturedCode = code;
 });
 
-const testEmail = 'vyombudha700@gmail.com';
+const testEmail = 'test@example.com';
 const testPassword = 'safepassword@34';
 
 beforeEach(async () => {
