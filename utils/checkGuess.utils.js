@@ -1,16 +1,4 @@
-
-/**
- * @typedef {object} Game
- * @property {string} id
- * @property {string[]} guesses
- * @property {Date} createdAt
- * @property {boolean} isCompleted
- * @property {Enumerator} mode
- * @property {string} userId
- * @property {number} remainingGuesses 
- * @property {string} targetWord
- * @property {boolean} isWinner 
- */
+import { Game } from '@prisma/client';
 
 /**
  * this checks game state variables to determine, if the game has been completed or not

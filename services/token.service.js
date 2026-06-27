@@ -1,16 +1,15 @@
 import 'dotenv/config';
 import { verifyRefreshToken } from '../utils/jwt.utils.js';
-import prisma from '../db/prisma.js';
+import prisma from '../config/prisma.config.js';
 import * as TokenError from '../errors/token.errors.js';
 import { getAccessToken, getRefreshToken } from '../utils/jwt.utils.js';
 
 const getExpiryDate = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
 
-
 /**  @typedef { import('../services/user.service.js').User } User */
 
-                                                                    
+
 /**
  * 
  * @param {User} user 
@@ -95,23 +94,27 @@ export async function rotateRefreshToken(oldRefreshToken) {
 
 /**
  * Revokes Current Session
+ * @param {string} userId
  * @param {string} refreshToken 
  */
-export async function revokeRefreshToken(refreshToken) {
+export async function revokeRefreshToken(userId, refreshToken) {
     await prisma.refreshToken.deleteMany({
-        where: { token: refreshToken }
+        where: {
+            token: refreshToken,
+            userId
+        }
     });
 }
 
 
 /**
  * Revokes All Sessions accross devices
- * @param {object} user 
+ * @param {string} userId
  */
-export async function revokeAllRefreshTokens(user) {
+export async function revokeAllRefreshTokens(userId) {
     await prisma.refreshToken.deleteMany({
         where: {
-            userId: user.id
+            userId
         }
     });
 }

@@ -2,14 +2,21 @@ import { hardWords } from '../data/hardWords.data.js';
 import { easyWords } from '../data/easyWords.data.js';
 import { VALID_WORDS } from '../data/validWords.data.js';
 import { validateGuess } from '../utils/checkGuess.utils.js';
-import { GameMode } from '@prisma/client';
+import { GameMode, Prisma } from '@prisma/client';
 
-import prisma from "../db/prisma.js";
+import prisma from "../config/prisma.config.js";
 import * as  GameError from '../errors/game.errors.js';
 
 
 /**
- * Take the current game difficulty, create a new gameId and game Object. Finally, stores it in gameState Map\
+ * @typedef {object} User
+ * @property {string} email
+ * @property {number} id
+ */
+
+
+/**
+ * Take the current game difficulty, create a new gameId and game state
  * @param {object} user - the user who created the game
  * @param {boolean} isHardMode -  current game diffculty parameter
  * @returns {String} gameID
@@ -33,22 +40,44 @@ export async function startGame(user, isHardMode = false) {
 }
 
 /**
- * returns new gameID
- * @param {object} user - user who owns the game
+ * Skips current game by setting isCompleted:true and isWinner:false. 
+ * Finally, returns new gameID
+ * @param {User} user - user who owns the game
+ * @param {string}  gameID - id of the game to skip
  * @param {boolean} isHardMode  difficulty of next game 
  * @returns {string} next gameID
  */
-export async function nextGame(user, isHardMode = false) {
+export async function nextGame(user, gameID, isHardMode = false) {
+
+    try {
+        await prisma.game.update({
+            where: {
+                id: gameID,
+                userId: user.id
+            },
+            data: {
+                isCompleted: true,
+                isWinner: false,
+            }
+        });
+    } catch (error) {
+        if (error.code === 'P2025') {
+            throw new GameError.NotFound(gameID);
+        }
+        throw error;
+    }
+
     return startGame(user, isHardMode);
 }
 
 /**
- * @param {object} user - user who owns the game
+ * @param {User} user - user who owns the game
+ * 
  * @param {strings} gameID - the game to be deleted 
  */
 export async function deleteGame(user, gameID) {
 
-    // Findga the game AND verify ownership (Prevents IDOR)
+    // Find the game AND verify ownership (Prevents IDOR)
     const game = await prisma.game.findFirst({
         where: {
             id: gameID,
@@ -68,14 +97,14 @@ export async function deleteGame(user, gameID) {
 }
 
 /**
- * @param {object} user - the user who owns the game 
+ * @param {User} user - the user who owns the game 
  * @param {string} guess - the guess word for current chance
  * @param {string} gameID -the ID of current game
- * @returns 
+ * @returns {Promise<void>}
  */
 export async function makeGuess(user, guess, gameID) {
+    guess = guess.toUpperCase().trim();
     if (!VALID_WORDS.has(guess)) throw new GameError.InvalidGuess(guess);
-
 
     // 1. Find the game AND verify ownership (Prevents IDOR)
     const game = await prisma.game.findFirst({
@@ -112,34 +141,17 @@ export async function makeGuess(user, guess, gameID) {
             }
         });
 
-        // create a new streak if not found, unlikely cause createuser already initiates this row
-        const mutatedStreak = await prisma.streak.upsert({
-            where: {
-                userId: game.userId
-            },
-            create: {
-                userId: game.userId
-            },
-            update: {}
-        });
-
-
-        // Sanitize the streak data
-        const {
-            userId,    // strip out
-            ...sanitizedStreak
-        } = mutatedStreak;
-
         // send data directly
         return {
-            mutatedGame,
-            mutatedStreak: sanitizedStreak
+            result: output.result,
+            isGameOver: mutatedGame.isCompleted,
+            isWinner: mutatedGame.isWinner
         };
 
     }
 
     // update the game & game streak logic now
-    const { mutatedGame, mutatedStreak } = await prisma.$transaction(async (tx) => {
+    const mutatedGame = await prisma.$transaction(async (tx) => {
         const mutatedGame = await tx.game.update({
             where: {
                 id: game.id,
@@ -182,32 +194,54 @@ export async function makeGuess(user, guess, gameID) {
             }
         });
 
-        return {
-            mutatedGame,
-            mutatedStreak
-        };
-
+        return mutatedGame;
     });
 
 
 
-    // Sanitize the streak data
-    const {
-        userId,    // strip out
-        ...sanitizedStreak
-    } = mutatedStreak;
-
-    // send data directly
+    // send data
     return {
-        mutatedGame,
-        mutatedStreak: sanitizedStreak
+        result: output.result,
+        isGameOver: mutatedGame.isCompleted,
+        isWinner: mutatedGame.isWinner
     };
 }
 
+export async function getGame(user, gameID) {
+    const game = await prisma.game.findFirst({
+        where: {
+            id: gameID,
+            userId: user.id
+        },
+    });
+
+    if (!game) throw new GameError.NotFound(gameID);
+
+    return game.isCompleted
+        ? game
+        : { ...game, targetWord: 'In Progress' };
+}
 
 
+export async function getAllGames(user) {
+    // query
+    const games = await prisma.game.findMany({
+        where: { userId: user.id },
+        select: {
+            id: true,
+            targetWord: true,
+            isWinner: true,
+            isCompleted: true,
+            createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' }
+    });
 
 
+    const gameHistory = games.map(game => {
+        if (!game.isCompleted) return { ...game, targetWord: 'In Progress' };
+        return game;
+    });
 
-
-
+    return gameHistory;
+}

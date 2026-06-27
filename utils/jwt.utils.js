@@ -1,5 +1,5 @@
-import jwt, { TokenExpiredError } from 'jsonwebtoken';
-
+import jwt from 'jsonwebtoken';
+const { TokenExpiredError } = jwt;
 const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
 const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
 

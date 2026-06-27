@@ -1,15 +1,13 @@
-// TODO: remove DEV_EMAIL_RECIPIENT override 
 import 'dotenv/config';
 import { sendRegistrationEmail } from "./email.service.js";
-import { getVerificationCode } from '../utils/getVerificationCode.utils.js';
-import prisma from "../db/prisma.js";
+import { getVerificationCode } from '../utils/email.utils.js';
+import prisma from "../config/prisma.config.js";
 import * as bcrypt from "bcrypt";
 import { minutesToMs } from '../utils/timeCalculator.utils.js';
 import * as UserError from '../errors/user.errors.js';
 import * as RegistrationError from '../errors/registration.errors.js';
 
 
-const devEmail = /** @type {string} */(process.env.DEV_EMAIL_RECIPIENT);
 
 const saltRounds = 10;
 
@@ -44,7 +42,7 @@ export async function initiateUser(email, password) {
 
 
 
-    // update if 
+    // update if double registration click
     await prisma.pendingUserRegistrations.upsert({
         where: { email },
         update: {
@@ -59,8 +57,8 @@ export async function initiateUser(email, password) {
         }
     })
 
-    // send the verification email too (DEV FOR NOW)
-    await sendRegistrationEmail(devEmail, verificationCode);
+    // send the verification email 
+    await sendRegistrationEmail(email, verificationCode);
 }
 
 
@@ -70,7 +68,7 @@ export async function initiateUser(email, password) {
  * @param {string} email - Verification Email
  * @returns {Promise<User>}
  */
-export async function verifyAndCreateUser(verificationCode, email) {
+export async function verifyAndCreate(verificationCode, email) {
 
 
 
@@ -86,7 +84,7 @@ export async function verifyAndCreateUser(verificationCode, email) {
 
     // check time validity 
     if (Date.now() > userEntry.expiresAt.getTime()) {
-        
+
         await prisma.pendingUserRegistrations.delete({
             where: { email }
         });
@@ -117,6 +115,9 @@ export async function verifyAndCreateUser(verificationCode, email) {
                 data: {
                     email: userEntry.email,
                     passwordHash: userEntry.passwordHash
+                },
+                omit: {
+                    passwordHash: true
                 }
             });
         });
@@ -138,10 +139,7 @@ export async function login(email, password) {
 
     const user = await prisma.user.findUnique({
         where: { email },
-        include: {
-            streak: true,
-            games: true,
-        }
+
     });
     if (!user) {
         throw new UserError.NotFound();
@@ -154,7 +152,6 @@ export async function login(email, password) {
     }
 
     // safely remove passwordHash from obj before sending to frontEnd
-    const { passwordHash: _, streak, games, ...safeUser } = user;
-    return { success: true, user: safeUser, streak, games };
-
+    const { passwordHash: _, ...safeUser } = user;
+    return { user: safeUser };
 }

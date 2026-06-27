@@ -1,4 +1,5 @@
-import { isEmail } from 'validator';
+import validator from 'validator';
+const { isEmail } = validator;
 import * as User from '../errors/user.errors.js';
 import * as Registration from '../errors/registration.errors.js';
 const MAX_PASSWORD_LENGTH = 72;

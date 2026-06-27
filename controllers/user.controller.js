@@ -23,37 +23,27 @@ export async function initiateUserRegistration(req, res) {
     });
 }
 
-
-export async function verifyRegistrationAndLoginUser(req, res) {
-    const { email, verificationCode } = req.validatedBody;
-    const user = await UserService.verifyAndCreateUser(verificationCode, email);
+async function issueSessionResponse(res, user, message) {
     const { refreshToken, accessToken } = await TokenService.signAndStoreRefreshTokens(user);
 
     res.cookie('accessToken', accessToken, { ...COOKIE_OPTIONS, maxAge: ACCESS_TOKEN_EXPIRATION });
     res.cookie('refreshToken', refreshToken, { ...COOKIE_OPTIONS, maxAge: REFRESH_TOKEN_EXPIRATION });
 
-    return res.status(200).json({
-        success: true,
-        message: 'Registration complete'
-    })
+    return res.status(200).json({ success: true, user, message });
+};
 
+export async function verifyRegistration(req, res) {
+    const { email, verificationCode } = req.validatedBody;
+    const user = await UserService.verifyAndCreate(verificationCode, email);
+    return issueSessionResponse(res, user, 'Registration Complete');
 }
 
-export async function loginUser(req, res) {
+export async function login(req, res) {
     const { email, password } = req.validatedBody;
-    const data = await UserService.login(email, password);
-
-    const { refreshToken, accessToken } = await TokenService.signAndStoreRefreshTokens(data.user);
-
-    res.cookie('accessToken', accessToken, { ...COOKIE_OPTIONS, maxAge: ACCESS_TOKEN_EXPIRATION });
-    res.cookie('refreshToken', refreshToken, { ...COOKIE_OPTIONS, maxAge: REFRESH_TOKEN_EXPIRATION });
-
-    res.status(200).json({
-        success: true,
-        data,
-        message: "Login successfull"
-    });
+    const { user } = await UserService.login(email, password);
+    return issueSessionResponse(res, user, 'Login Successful');
 }
+
 
 export async function rotateTokens(req, res) {
     const { refreshToken: oldRefreshToken } = req.cookies;
@@ -70,8 +60,9 @@ export async function rotateTokens(req, res) {
 }
 
 
-export async function logoutUser(req, res) {
+export async function logout(req, res) {
     const { refreshToken } = req.cookies;
+    const user = req.user;
 
     if (refreshToken) {
         await TokenService.revokeRefreshToken(refreshToken);
@@ -90,7 +81,7 @@ export async function logoutUser(req, res) {
 export async function logoutAllDevices(req, res) {
     const user = req.user;
 
-    await TokenService.revokeAllRefreshTokens(user);
+    await TokenService.revokeAllRefreshTokens(user.id);
 
     res.clearCookie('accessToken', COOKIE_OPTIONS);
     res.clearCookie('refreshToken', COOKIE_OPTIONS);

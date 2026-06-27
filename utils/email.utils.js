@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 
+
+
 /**
  * Returns a 6 character long alphanumeric code; excluding ['0','1','L','I']
  * @returns {string} 
@@ -11,4 +13,13 @@ export function getVerificationCode() {
         code += chars[crypto.randomInt(0, chars.length)];
     }
     return code;
+}
+
+/**
+ * Gets full email address and returns sanitized name
+ * @param {string} email 
+ * @returns {string}
+ */
+export function parseUserName(email) {
+    return email.split('@')[0];
 }
