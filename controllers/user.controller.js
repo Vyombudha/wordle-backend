@@ -65,7 +65,7 @@ export async function logout(req, res) {
     const user = req.user;
 
     if (refreshToken) {
-        await TokenService.revokeRefreshToken(refreshToken);
+        await TokenService.revokeRefreshToken(user.id, refreshToken);
     }
 
     res.clearCookie('accessToken', COOKIE_OPTIONS);

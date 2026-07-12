@@ -1,11 +1,12 @@
 // middlewares/rateLimiter.middleware.js
 import rateLimit from 'express-rate-limit';
+import { ipKeyGenerator } from 'express-rate-limit';
 
 // Strict limiter for sensitive auth actions
 export const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10,                   // 10 attempts per window
-    keyGenerator: (req) => req.body.email ?? req.ip,
+    keyGenerator: (req) => req.body.email ?? ipKeyGenerator(req.ip),
     message: {
         success: false,
         message: 'Too many attempts, please try again later.'
@@ -25,34 +26,28 @@ export const tokenLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false
 });
-
-
-// Prevent guess spamming — most important one
 export const guessLimiter = rateLimit({
-    windowMs: 60 * 1000,   // 1 minute
-    max: 30,               // 30 guesses/min is already generous
-    keyGenerator: (req) => `${req.user?.id}:${req.params.gameID}`, // per user per game
+    windowMs: 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => `${req.user?.id ?? ipKeyGenerator(req.ip)}:${req.params.gameID}`,
     message: { success: false, message: 'Slow down — too many guesses.' },
     standardHeaders: true,
     legacyHeaders: false
 });
 
-
-// Prevent farming new games
 export const startGameLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
-    keyGenerator: (req) => req.user?.id,
+    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip),
     message: { success: false, message: 'Too many games started.' },
     standardHeaders: true,
     legacyHeaders: false
 });
 
-// Read endpoints — loose limit just to prevent scraping
 export const readLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 60,
-    keyGenerator: (req) => req.user?.id,
+    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip),
     standardHeaders: true,
     legacyHeaders: false
 });

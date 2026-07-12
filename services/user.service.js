@@ -70,8 +70,6 @@ export async function initiateUser(email, password) {
  */
 export async function verifyAndCreate(verificationCode, email) {
 
-
-
     const userEntry = await prisma.pendingUserRegistrations.findUnique({
         where: {
             email
@@ -111,10 +109,12 @@ export async function verifyAndCreate(verificationCode, email) {
                 }
             });
 
+
             return tx.user.create({
                 data: {
                     email: userEntry.email,
-                    passwordHash: userEntry.passwordHash
+                    passwordHash: userEntry.passwordHash,
+                    streak: { create: {} }  // all fields default to 0/null per schema
                 },
                 omit: {
                     passwordHash: true

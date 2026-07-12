@@ -1,0 +1,548 @@
+openapi: 3.0.3
+info:
+  title: Wordle Backend API
+  version: 1.0.0
+  description: |
+    Backend for a personal Wordle clone. Authentication is cookie-based
+    (httpOnly `accessToken` / `refreshToken` JWT cookies) rather than
+    bearer tokens, so `accessToken` is modeled below as an apiKey-in-cookie
+    security scheme purely for documentation purposes — most Swagger UIs
+    can't drive an httpOnly cookie flow interactively.
+
+    All responses share the shape `{ success: boolean, ... }`. Error
+    responses are always `{ success: false, message: string }`, with the
+    exact status code and message determined by which `AppError` subclass
+    the service layer threw (see `errors/*.errors.js`).
+
+servers:
+  - url: http://localhost:3000
+    description: Local dev
+
+tags:
+  - name: User
+    description: Registration, authentication, and session management
+  - name: Games
+    description: Wordle gameplay — all routes require a valid accessToken cookie
+
+components:
+  securitySchemes:
+    accessTokenCookie:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: >
+        Set as an httpOnly cookie by /register/verify, /login, and
+        /token/rotate. Required (via the validateUserToken middleware) for
+        every /api/games/* route and for /api/user/logout, /logout/all.
+
+  schemas:
+    SuccessMessage:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+      required: [success, message]
+
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+      required: [success, message]
+
+    RateLimitedResponse:
+      type: object
+      description: >
+        Returned by authLimiter, tokenLimiter, guessLimiter, and
+        startGameLimiter when their window's request cap is exceeded.
+        readLimiter does NOT set a custom message, so on GET /api/games and
+        GET /api/games/{gameID} a 429 falls back to express-rate-limit's
+        own default body/shape instead of this one.
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Too many attempts, please try again later." }
+
+    User:
+      type: object
+      description: passwordHash is always omitted from responses (Prisma `omit`).
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AuthResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        user: { $ref: '#/components/schemas/User' }
+        message: { type: string }
+      required: [success, user, message]
+
+    RegisterRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: Enforced by validateUser.middleware.js
+      required: [email, password]
+
+    VerifyRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        verificationCode:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: 6-character alphanumeric code, excludes 0/1/L/I, emailed on registration
+      required: [email, verificationCode]
+
+    LoginRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+      required: [email, password]
+
+    GameMode:
+      type: string
+      enum: [EASY, HARD, DAILY]
+      description: DAILY exists in the schema but isn't reachable through any current route.
+
+    Game:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        targetWord:
+          type: string
+          description: >
+            Returned as the literal string "In Progress" instead of the real
+            word whenever isCompleted is false, so the answer is never
+            leaked mid-game.
+        guesses:
+          type: array
+          items: { type: string }
+        remainingGuesses: { type: integer, example: 6 }
+        isWinner: { type: boolean }
+        isCompleted: { type: boolean }
+        mode: { $ref: '#/components/schemas/GameMode' }
+        createdAt: { type: string, format: date-time }
+
+    GameSummary:
+      type: object
+      description: Shape returned by GET /api/games (a trimmed projection of Game).
+      properties:
+        id: { type: string, format: uuid }
+        targetWord: { type: string, description: "\"In Progress\" until the game is completed" }
+        isWinner: { type: boolean }
+        isCompleted: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    GuessRequest:
+      type: object
+      properties:
+        guess:
+          type: string
+          description: Case-insensitive; must be a real word from the server's word list.
+      required: [guess]
+
+    GuessResult:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        result:
+          type: array
+          items:
+            type: string
+            enum: [green, yellow, gray]
+        isGameOver: { type: boolean }
+        isWinner: { type: boolean }
+      required: [success, result, isGameOver, isWinner]
+
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or expired accessToken cookie
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          examples:
+            noToken:
+              value: { success: false, message: "Invalid Token Sent From User" }
+            expired:
+              value: { success: false, message: "Invalid Token Sent" }
+
+    GameNotFound:
+      description: >
+        Game doesn't exist, or exists but belongs to a different user
+        (ownership is enforced via a userId filter on the same query, so
+        "not mine" and "doesn't exist" are indistinguishable by design —
+        this is the IDOR protection).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example: { success: false, message: "Game ID:3fa85f64-5717-4562-b3fc-2c963f66afa6 not found!" }
+
+    TooManyRequests:
+      description: Rate limit exceeded for this endpoint's window
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RateLimitedResponse' }
+
+paths:
+  /api/user/register:
+    post:
+      tags: [User]
+      summary: Begin registration — stores a pending registration and emails a verification code
+      description: Rate limited by authLimiter — 10 requests / 15 min, keyed by email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '200':
+          description: Verification email sent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessMessage' }
+              example: { success: true, message: "Verify your email" }
+        '401':
+          description: Malformed email or empty password
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Email or Password" }
+        '413':
+          description: Password shorter than 8 or longer than 72 characters
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Password Length Invalid for Registration" }
+        '409':
+          description: A User with this email already exists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "User Already Exists In DB" }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/user/register/verify:
+    post:
+      tags: [User]
+      summary: Complete registration with the emailed code — creates the User and starts a session
+      description: Rate limited by authLimiter — 10 requests / 15 min, keyed by email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyRequest' }
+      responses:
+        '200':
+          description: >
+            Registration complete. Sets accessToken (1h) and refreshToken (7d)
+            httpOnly cookies.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: "accessToken=<jwt>; HttpOnly; SameSite=Lax, refreshToken=<jwt>; HttpOnly; SameSite=Lax"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+              example: { success: true, user: { id: "...", email: "user@example.com" }, message: "Registration Complete" }
+        '400':
+          description: Malformed request body, OR the code doesn't match what was emailed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Pending Registration Verification Code or Email Is Invalid" }
+        '404':
+          description: No pending registration exists for this email
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Couldn't Find Pending Registration Entry" }
+        '409':
+          description: The pending registration's verification code has expired (60 min TTL)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Pending Registration Had Expired" }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/user/login:
+    post:
+      tags: [User]
+      summary: Log in with email + password
+      description: Rate limited by authLimiter — 10 requests / 15 min, keyed by email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login successful. Sets accessToken (1h) and refreshToken (7d) httpOnly cookies.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+              example: { success: true, user: { id: "...", email: "user@example.com" }, message: "Login Successful" }
+        '401':
+          description: Malformed email/password in the request, OR correct email with the wrong password
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Email or Password" }
+        '404':
+          description: No account exists for this email
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "User Not Found DB" }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/user/logout:
+    post:
+      tags: [User]
+      summary: Log out of the current session
+      description: >
+        Not rate limited. Revokes the RefreshToken row matching the
+        refreshToken cookie (if present) and clears both cookies regardless.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessMessage' }
+              example: { success: true, message: "Logged out successfully" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/user/logout/all:
+    post:
+      tags: [User]
+      summary: Log out of every device — revokes all RefreshToken rows for the user
+      description: Not rate limited.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessMessage' }
+              example: { success: true, message: "Logged out from all devices successfully" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/user/token/rotate:
+    post:
+      tags: [User]
+      summary: Exchange a refreshToken cookie for a fresh access/refresh token pair
+      description: >
+        Rate limited by tokenLimiter — 30 requests / 15 min (not keyed by
+        user, since this can be called before a valid access token exists).
+        Does NOT require the accessTokenCookie security scheme — auth here
+        is via the refreshToken cookie only. If the presented refreshToken
+        is cryptographically valid but no longer exists in the DB (already
+        rotated/logged out), every refresh token for that user is deleted
+        as a token-leak precaution.
+      parameters:
+        - name: Cookie
+          in: header
+          required: true
+          schema: { type: string }
+          description: Must include refreshToken=<jwt>
+      responses:
+        '200':
+          description: New accessToken/refreshToken cookies issued; the old refreshToken is deleted.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessMessage' }
+              example: { success: true, message: "Token rotation complete" }
+        '401':
+          description: Missing/invalid/expired refreshToken, or a reused (already-rotated) refreshToken
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Token Sent From User" }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/games:
+    get:
+      tags: [Games]
+      summary: List all of the authenticated user's games
+      description: Rate limited by readLimiter — 60 requests / min, keyed by user id.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  games:
+                    type: array
+                    items: { $ref: '#/components/schemas/GameSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+    post:
+      tags: [Games]
+      summary: Start a new game
+      description: Rate limited by startGameLimiter — 10 requests / min, keyed by user id.
+      security:
+        - accessTokenCookie: []
+      parameters:
+        - name: isHardMode
+          in: query
+          required: false
+          schema: { type: string, enum: ['true', 'false'], default: 'false' }
+          description: Any value other than the literal string "true" is treated as false.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  gameID: { type: string, format: uuid }
+                  message: { type: string, example: "New Game Created Successfully" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/games/{gameID}:
+    parameters:
+      - name: gameID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+
+    get:
+      tags: [Games]
+      summary: Get a single game's state
+      description: Rate limited by readLimiter — 60 requests / min, keyed by user id.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  game: { $ref: '#/components/schemas/Game' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/GameNotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+    delete:
+      tags: [Games]
+      summary: Delete a game
+      description: Rate limited by startGameLimiter — 10 requests / min, keyed by user id.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessMessage' }
+              example: { success: true, message: "Game Deleted Successfully" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/GameNotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/games/{gameID}/guess:
+    parameters:
+      - name: gameID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+
+    post:
+      tags: [Games]
+      summary: Submit a guess
+      description: >
+        Rate limited by guessLimiter — 30 requests / min, keyed by
+        user id + gameID together (so it's per-game, not just per-user).
+        On the guess that wins or exhausts remainingGuesses, this also
+        updates the user's streak inside a DB transaction.
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GuessRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuessResult' }
+        '400':
+          description: Guess isn't a real word, or its length doesn't match the target word's length
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                notAWord:
+                  value: { success: false, message: "The Guess Word, ZZZZZ isn't a valid guess" }
+                wrongLength:
+                  value: { success: false, message: "Expected Guess Length 5, got 3" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/GameNotFound' }
+        '422':
+          description: Game is already completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Game state: game already completed" }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/games/{gameID}/skip:
+    parameters:
+      - name: gameID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+
+    post:
+      tags: [Games]
+      summary: Abandon the current game (marked completed, not a win) and start a new one
+      description: Rate limited by startGameLimiter — 10 requests / min, keyed by user id.
+      security:
+        - accessTokenCookie: []
+      parameters:
+        - name: isHardMode
+          in: query
+          required: false
+          schema: { type: string, enum: ['true', 'false'], default: 'false' }
+          description: Difficulty for the newly started game, independent of the skipped game's mode.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Game Skipped Successfully" }
+                  gameID:
+                    type: string
+                    format: uuid
+                    description: ID of the newly started game, not the one that was skipped.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/GameNotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }

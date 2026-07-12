@@ -1,4 +1,4 @@
-import { Game } from '@prisma/client';
+import Game from "@prisma/client";
 
 /**
  * this checks game state variables to determine, if the game has been completed or not
@@ -6,12 +6,7 @@ import { Game } from '@prisma/client';
  * @param {boolean} isWinner 
  * @returns {boolean}
  */
-const checkGameState = (remainingGuesses, isWinner) => {
-    return remainingGuesses === 0 || isWinner;
-}
-
-
-
+const checkGameState = (remainingGuesses, isWinner) => remainingGuesses === 0 || isWinner;
 
 
 /**
