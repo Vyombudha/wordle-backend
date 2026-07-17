@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
+import cors from 'cors';
+
 
 
 
@@ -18,6 +20,12 @@ import { validateUserToken } from './middlewares/verifyTokens.middleware.js';
 
 const openapiDocument = YAML.load("./docs/openapi.yaml");
 const app = express();
+
+
+app.use(cors({
+    origin: 'http://localhost:5173', // your Vite dev server — NOT '*'
+    credentials: true,
+}));
 
 app.use(
     "/docs",

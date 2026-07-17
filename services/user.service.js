@@ -96,9 +96,6 @@ export async function verifyAndCreate(verificationCode, email) {
 
 
     try {
-
-
-
         // register the user onto DB
         return await prisma.$transaction(async (tx) => {
 
@@ -135,6 +132,27 @@ export async function verifyAndCreate(verificationCode, email) {
     }
 }
 
+/**
+ * Returns User Data 
+ * @param {string} id
+ *  
+ */
+export async function aboutUser(id) {
+
+    const user = await prisma.user.findUnique({
+        where: { id },
+        omit: {
+            passwordHash: true
+        }
+    });
+
+    if (!user) {
+        throw new UserError.NotFound();
+    }
+    return user;
+
+}
+
 export async function login(email, password) {
 
     const user = await prisma.user.findUnique({
@@ -155,3 +173,5 @@ export async function login(email, password) {
     const { passwordHash: _, ...safeUser } = user;
     return { user: safeUser };
 }
+
+

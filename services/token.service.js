@@ -3,8 +3,9 @@ import { verifyRefreshToken } from '../utils/jwt.utils.js';
 import prisma from '../config/prisma.config.js';
 import * as TokenError from '../errors/token.errors.js';
 import { getAccessToken, getRefreshToken } from '../utils/jwt.utils.js';
+import { daysToMs } from '../utils/timeCalculator.utils.js';
 
-const getExpiryDate = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+const getExpiryDate = () => new Date(Date.now() + daysToMs(7)); // 7 days
 
 
 /**  @typedef { import('../services/user.service.js').User } User */
@@ -110,7 +111,7 @@ export async function revokeRefreshToken(userId, refreshToken) {
 /**
  * Revokes All Sessions accross devices
  * @param {string} userId
- */
+ */21
 export async function revokeAllRefreshTokens(userId) {
     await prisma.refreshToken.deleteMany({
         where: {
